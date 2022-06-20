@@ -2,9 +2,13 @@
 # Imports
 #----------------------------------------------------------------------------#
 
+from calendar import c
+from dataclasses import dataclass
 from email.policy import default
 import json
 from pickle import FALSE
+from sre_parse import State
+from unicodedata import name
 from xmlrpc.client import DateTime
 import dateutil.parser
 import babel
@@ -13,7 +17,8 @@ from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
 import logging
 from logging import Formatter, FileHandler
-from flask_wtf import FlaskForm as BaseForm
+
+from requests import session
 from forms import *
 from flask_migrate import Migrate
 #----------------------------------------------------------------------------#
@@ -118,29 +123,49 @@ def index():
 
 @app.route('/venues')
 def venues():
+
   # TODO: replace with real venues data.
   #       num_upcoming_shows should be aggregated based on number of upcoming shows per venue.
-  data=[{
-    "city": "San Francisco",
-    "state": "CA",
-    "venues": [{
-      "id": 1,
-      "name": "The Musical Hop",
-      "num_upcoming_shows": 0,
-    }, {
-      "id": 3,
-      "name": "Park Square Live Music & Coffee",
-      "num_upcoming_shows": 1,
-    }]
-  }, {
-    "city": "New York",
-    "state": "NY",
-    "venues": [{
-      "id": 2,
-      "name": "The Dueling Pianos Bar",
-      "num_upcoming_shows": 0,
-    }]
-  }]
+  data = []
+  places = db.session.query(Venue).distinct("city", "state")
+  for place in places:
+    city = place.city
+    state =place.state
+    venues =[]
+    for venue in db.session.query(Venue).filter_by(city = city, State = State):
+      upcoming_shows = session.query(Show).filter_by(Venue_id =Venue.id).count()
+      venues.append({
+        "id" : Venue.id,
+        "name" : Venue.name,
+        "new_upcoming_shows" : upcoming_shows
+      })
+    data.append({
+      "city" : city,
+      "state": State,
+      "Venues": venues
+      })
+
+  # data=[{
+  #   "city": "San Francisco",
+  #   "state": "CA",
+  #   "venues": [{
+  #     "id": 1,
+  #     "name": "The Musical Hop",
+  #     "num_upcoming_shows": 0,
+  #   }, {
+  #     "id": 3,
+  #     "name": "Park Square Live Music & Coffee",
+  #     "num_upcoming_shows": 1,
+  #   }]
+  # }, {
+  #   "city": "New York",
+  #   "state": "NY",
+  #   "venues": [{
+  #     "id": 2,
+  #     "name": "The Dueling Pianos Bar",
+  #     "num_upcoming_shows": 0,
+  #   }]
+  # }]
   return render_template('pages/venues.html', areas=data);
 
 @app.route('/venues/search', methods=['POST'])
@@ -247,7 +272,42 @@ def show_venue(venue_id):
 
 @app.route('/venues/create', methods=['GET'])
 def create_venue_form():
-  form = VenueForm()
+  form = VenueForm(request.form)
+  try:
+    venue = Venue(
+      name = form.name.data,
+      city = form.city.data,
+      State= form.state.data,
+      address = form.address.data,
+      phone = form.phone.data,
+      website = form.website_link.data,
+      facebook = form.facebook_link.data,
+      genres = form.genres.data,
+      image_link = form.image_link.data,
+      seeking_talent = form.seeking_talent.data,
+      seeking_description = form.seeking_description.data
+    )
+    db.session.add(venue)
+    db.session.commit()
+  except:
+    db.session.rollback()
+  finally:
+    db.session.close()
+
+#   form = VenueForm(request.form)
+# try:
+#     venue = Venue(
+#         name=form.name.data,
+#         city=form.city.data,
+#         ...
+#         genres=form.genres.data,
+#         ...
+#         seeking_talent=form.seeking_talent.data,
+#         ...
+#     )
+#     db.session.add(venue)
+#     db.session.commit()
+# except...
   return render_template('forms/new_venue.html', form=form)
 
 @app.route('/venues/create', methods=['POST'])
@@ -277,7 +337,7 @@ def delete_venue(venue_id):
 def artists():
   # TODO: replace with real data returned from querying the database
 
-  data = Artist.query.order_by(id)
+  data = db.session.query(Artist).order_by('id')
   
   # data=[{
   #   "id": 4,
